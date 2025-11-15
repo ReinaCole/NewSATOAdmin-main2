@@ -1,0 +1,102 @@
+[debug] [2025-11-15T14:05:05.544Z] ----------------------------------------------------------------------
+[debug] [2025-11-15T14:05:05.550Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\kianc\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init hosting
+[debug] [2025-11-15T14:05:05.551Z] CLI Version:   14.25.0
+[debug] [2025-11-15T14:05:05.551Z] Platform:      win32
+[debug] [2025-11-15T14:05:05.551Z] Node Version:  v24.11.1
+[debug] [2025-11-15T14:05:05.551Z] Time:          Sat Nov 15 2025 22:05:05 GMT+0800 (Philippine Standard Time)
+[debug] [2025-11-15T14:05:05.551Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  D:\Download\NewSATOAdmin-main\NewSATOAdmin-main
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2025-11-15T14:05:19.481Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-15T14:05:19.481Z] > authorizing via signed-in user (kianchasetrent@gmail.com)
+[debug] [2025-11-15T14:05:19.482Z] Checked if tokens are valid: true, expires at: 1763219098756
+[debug] [2025-11-15T14:05:19.483Z] Checked if tokens are valid: true, expires at: 1763219098756
+[debug] [2025-11-15T14:05:19.484Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
+[debug] [2025-11-15T14:05:20.042Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2025-11-15T14:05:20.042Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] 
+=== Hosting Setup
+[debug] [2025-11-15T14:05:22.763Z] Checked if tokens are valid: true, expires at: 1763219098756
+[debug] [2025-11-15T14:05:22.763Z] Checked if tokens are valid: true, expires at: 1763219098756
+[debug] [2025-11-15T14:05:22.764Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/adminpage-f9686 [none]
+[debug] [2025-11-15T14:05:23.032Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/adminpage-f9686 200
+[debug] [2025-11-15T14:05:23.032Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/adminpage-f9686 {"projectId":"adminpage-f9686","projectNumber":"8079081540","displayName":"AdminPage","name":"projects/adminpage-f9686","resources":{"hostingSite":"adminpage-f9686"},"state":"ACTIVE","etag":"1_f0fb2905-7225-467f-99f1-8e01d22753ac"}
+[info] 
+[info] Your public directory is the folder (relative to your project directory) that
+[info] will contain Hosting assets to be uploaded with firebase deploy. If you
+[info] have a build process for your assets, use your build's output directory.
+[info] 
+[info] 
+[info] i  Didn't detect a .git folder. Assuming D:\Download\NewSATOAdmin-main\NewSATOAdmin-main is the project root. 
+[info] i  Authorizing with GitHub to upload your service account to a GitHub repository's secrets store. 
+[info] 
+[info] Visit this URL on this device to log in:
+[info] https://github.com/login/oauth/authorize?client_id=89cf50f02ac6aaed3484&state=977964121&redirect_uri=http%3A%2F%2Flocalhost%3A9005&scope=read%3Auser%20repo%20public_repo
+[info] 
+[info] Waiting for authentication...
+[debug] [2025-11-15T14:05:58.356Z] >>> [apiv2][query] POST https://github.com/login/oauth/access_token [none]
+[debug] [2025-11-15T14:05:58.357Z] >>> [apiv2][body] POST https://github.com/login/oauth/access_token [stream]
+[debug] [2025-11-15T14:05:58.872Z] <<< [apiv2][status] POST https://github.com/login/oauth/access_token 200
+[debug] [2025-11-15T14:05:58.872Z] <<< [apiv2][body] POST https://github.com/login/oauth/access_token {"access_token":"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","token_type":"bearer","scope":"read:user,repo"}
+[debug] [2025-11-15T14:05:58.878Z] >>> [apiv2][query] GET https://api.github.com/user [none]
+[debug] [2025-11-15T14:05:59.383Z] <<< [apiv2][status] GET https://api.github.com/user 200
+[debug] [2025-11-15T14:05:59.383Z] <<< [apiv2][body] GET https://api.github.com/user {"login":"KaitoCole","id":165266999,"node_id":"U_kgDOCdnGNw","avatar_url":"https://avatars.githubusercontent.com/u/165266999?v=4","gravatar_id":"","url":"https://api.github.com/users/KaitoCole","html_url":"https://github.com/KaitoCole","followers_url":"https://api.github.com/users/KaitoCole/followers","following_url":"https://api.github.com/users/KaitoCole/following{/other_user}","gists_url":"https://api.github.com/users/KaitoCole/gists{/gist_id}","starred_url":"https://api.github.com/users/KaitoCole/starred{/owner}{/repo}","subscriptions_url":"https://api.github.com/users/KaitoCole/subscriptions","organizations_url":"https://api.github.com/users/KaitoCole/orgs","repos_url":"https://api.github.com/users/KaitoCole/repos","events_url":"https://api.github.com/users/KaitoCole/events{/privacy}","received_events_url":"https://api.github.com/users/KaitoCole/received_events","type":"User","user_view_type":"private","site_admin":false,"name":null,"company":null,"blog":"","location":null,"email":null,"hireable":null,"bio":null,"twitter_username":null,"notification_email":null,"public_repos":6,"public_gists":0,"followers":0,"following":0,"created_at":"2024-03-28T09:33:22Z","updated_at":"2025-05-28T18:10:00Z","private_gists":0,"total_private_repos":1,"owned_private_repos":1,"disk_usage":1958,"collaborators":0,"two_factor_authentication":false,"plan":{"name":"free","space":976562499,"collaborators":0,"private_repos":10000}}
+[info] 
+[info] +  Success! Logged into GitHub as KaitoCole 
+[info] 
+[debug] [2025-11-15T14:06:33.967Z] >>> [apiv2][query] GET https://api.github.com/repos//actions/secrets/public-key type=owner
+[debug] [2025-11-15T14:06:34.300Z] <<< [apiv2][status] GET https://api.github.com/repos//actions/secrets/public-key 404
+[debug] [2025-11-15T14:06:34.301Z] <<< [apiv2][body] GET https://api.github.com/repos//actions/secrets/public-key {"message":"Not Found","documentation_url":"https://docs.github.com/rest","status":"404"}
+[info] 
+[info] 
+[error] !  The provided authorization cannot be used with this repository. If this repository is in an organization, did you remember to grant access? 
+[info] 
+[info] i  Action required: Visit this URL to ensure access has been granted to the appropriate organization(s) for the Firebase CLI GitHub OAuth App: 
+[info] https://github.com/settings/connections/applications/89cf50f02ac6aaed3484
+[info] 
+[debug] [2025-11-15T14:06:46.399Z] >>> [apiv2][query] GET https://api.github.com/repos/dasdda/actions/secrets/public-key type=owner
+[debug] [2025-11-15T14:06:46.739Z] <<< [apiv2][status] GET https://api.github.com/repos/dasdda/actions/secrets/public-key 404
+[debug] [2025-11-15T14:06:46.739Z] <<< [apiv2][body] GET https://api.github.com/repos/dasdda/actions/secrets/public-key {"message":"Not Found","documentation_url":"https://docs.github.com/rest","status":"404"}
+[info] 
+[info] 
+[error] !  The provided authorization cannot be used with this repository. If this repository is in an organization, did you remember to grant access? 
+[info] 
+[info] i  Action required: Visit this URL to ensure access has been granted to the appropriate organization(s) for the Firebase CLI GitHub OAuth App: 
+[info] https://github.com/settings/connections/applications/89cf50f02ac6aaed3484
+[info] 
+[debug] [2025-11-15T14:06:46.861Z] >>> [apiv2][query] GET https://api.github.com/repos/dasdda/actions/secrets/public-key type=owner
+[debug] [2025-11-15T14:06:47.203Z] <<< [apiv2][status] GET https://api.github.com/repos/dasdda/actions/secrets/public-key 404
+[debug] [2025-11-15T14:06:47.204Z] <<< [apiv2][body] GET https://api.github.com/repos/dasdda/actions/secrets/public-key {"message":"Not Found","documentation_url":"https://docs.github.com/rest","status":"404"}
+[info] 
+[info] 
+[error] !  The provided authorization cannot be used with this repository. If this repository is in an organization, did you remember to grant access? 
+[info] 
+[info] i  Action required: Visit this URL to ensure access has been granted to the appropriate organization(s) for the Firebase CLI GitHub OAuth App: 
+[info] https://github.com/settings/connections/applications/89cf50f02ac6aaed3484
+[info] 
+[debug] [2025-11-15T14:12:06.062Z] >>> [apiv2][query] GET https://api.github.com/repos/dasddacd D:\Download\NewSATOAdmin-main\NewSATOAdmin-maingit init/actions/secrets/public-key type=owner
+[debug] [2025-11-15T14:12:06.452Z] <<< [apiv2][status] GET https://api.github.com/repos/dasddacd D:\Download\NewSATOAdmin-main\NewSATOAdmin-maingit init/actions/secrets/public-key 404
+[debug] [2025-11-15T14:12:06.452Z] <<< [apiv2][body] GET https://api.github.com/repos/dasddacd D:\Download\NewSATOAdmin-main\NewSATOAdmin-maingit init/actions/secrets/public-key {"message":"Not Found","documentation_url":"https://docs.github.com/rest","status":"404"}
+[info] 
+[info] 
+[error] !  The provided authorization cannot be used with this repository. If this repository is in an organization, did you remember to grant access? 
+[info] 
+[info] i  Action required: Visit this URL to ensure access has been granted to the appropriate organization(s) for the Firebase CLI GitHub OAuth App: 
+[info] https://github.com/settings/connections/applications/89cf50f02ac6aaed3484
+[info] 
