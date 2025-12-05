@@ -1,490 +1,357 @@
 <script>
-  import { onMount } from "svelte";
-  import {
-    collection,
-    query,
-    orderBy,
-    onSnapshot,
-    getDocs,
-    addDoc,
-    updateDoc,
-    deleteDoc,
-    doc
-  } from "firebase/firestore";
-  import { auth } from "$lib/firebase";
-  import { signOut } from "firebase/auth";
-  import DOMPurify from 'dompurify'; // Import DOMPurify for sanitization
-  import validator from 'validator'; // Import a validator library
+import { onMount } from "svelte";
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc
+} from "firebase/firestore";
+import { auth } from "$lib/firebase";
+import { signOut } from "firebase/auth";
+import DOMPurify from "dompurify";
+import validator from "validator";
 
-  // prevent SSR 500 by defining variables used in the template
-  let activeTab = "library";
-  function goTo(path) { if (typeof window !== "undefined") window.location.href = path; }
+let activeTab = "library";
+let db = null;
+let app = null;
+let entries = [];
+let componentName = "";
+let description = "";
+let saving = false;
+let loading = true;
 
-  let db = null;
-  let entries = [];
-  let componentName = "";
-  let description = "";
-  let saving = false;
-  let loading = true; // show loading UI immediately
+function goTo(path){ if (typeof window !== "undefined") window.location.href = path; }
 
-  onMount(async () => {
+onMount(async () => {
+  try {
+    const mod = await import("$lib/firebase");
+    db = mod.db;
+    app = mod.app;
+    const appAuth = mod.auth;
+
+    if (!db) { loading = false; return; }
+
+    const q = query(collection(db, "components"), orderBy("componentName"));
+
     try {
-      // dynamic import to avoid SSR firebase init problems
-      const mod = await import("$lib/firebase");
-      db = mod.db;
-      const auth = mod.auth;
-
-      if (!db) {
-        console.error("Firestore not initialized (db is undefined)");
-        loading = false;
-        return;
-      }
-
-      // Build query
-      const q = query(collection(db, "Components"), orderBy("Name"));
-
-      // fast initial load
-      try {
-        const snap = await getDocs(q);
-        entries = snap.docs.map(d => ({ id: d.id, ...d.data(), editing: false }));
-      } catch (err) {
-        console.warn("initial getDocs failed:", err);
-      } finally {
-        loading = false;
-      }
-
-      // realtime listener to keep UI updated
-      const unsubSnapshot = onSnapshot(q, (snap) => {
-        console.log("Snapshot received:", snap.docs); // Check if this logs any documents
-        entries = snap.docs.map(d => ({ id: d.id, ...d.data(), editing: false }));
-      }, (err) => {
-        console.error("onSnapshot error:", err);
+      const snap = await getDocs(q);
+      entries = snap.docs.map(d => {
+        const data = d.data() || {};
+        const name = data.componentName ?? data.Name ?? data.name ?? "";
+        const desc = data.description ?? data.Description ?? "";
+        const image_path = data.image_path ?? data.imagePath ?? data.image ?? "";
+        return { id: d.id, name, description: desc, image_path, editing:false, uploading:false };
       });
-
-      // set up auth guard (non-blocking while not signed in)
-      const { onAuthStateChanged, signOut } = await import("firebase/auth");
-      const { collection: colFn, getDocs: getDocsFn } = await import("firebase/firestore");
-      const unsubAuth = onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          // not signed in — do nothing (stay on page or login page should handle)
-          return;
-        }
-
-        // check Admins collection for any field matching the signed-in email (case-insensitive)
-        try {
-          const email = (user.email || "").trim().toLowerCase();
-          const snap = await getDocsFn(colFn(db, "Admins"));
-          const allowed = snap.docs.some(d =>
-            Object.values(d.data() || {}).some(v =>
-              String(v || "").trim().toLowerCase() === email
-            )
-          );
-          console.log("Is user allowed:", allowed); // Log whether the user is allowed
-
-          if (!allowed) {
-            await signOut(auth);
-            alert("You are not authorized.");
-            window.location.href = "/";
-          }
-        } catch (err) {
-          console.error("admin-check error:", err);
-        }
-      });
-
-      // cleanup both listeners on destroy
-      return () => {
-        try { unsubSnapshot && unsubSnapshot(); } catch(e) {}
-        try { unsubAuth && unsubAuth(); } catch(e) {}
-      };
-    } catch (err) {
-      console.error("onMount init error:", err);
+    } catch (e) {
+      entries = [];
+    } finally {
       loading = false;
     }
-  });
 
-  async function addEntry() {
-    const name = DOMPurify.sanitize(componentName.trim());
-    const desc = DOMPurify.sanitize(description.trim());
-
-    // Validate input
-    if (!validator.isLength(name, { min: 1 })) {
-      alert("Component name cannot be empty.");
-      return;
-    }
-
-    if (!db) { alert("Database not ready"); return; }
-    saving = true;
-    try {
-      await addDoc(collection(db, "Components"), { Name: name, Description: desc });
-      componentName = "";
-      description = "";
-    } catch (err) {
-      console.error(err);
-      alert("Failed to add: " + (err?.message || err));
-    } finally {
-      saving = false;
-    }
-  }
-
-  function editEntry(i) {
-    entries[i].editing = true;
-    entries = [...entries];
-  }
-
-  async function saveEntry(i) {
-    if (!db) { console.error("saveEntry: db not ready"); return; }
-    const e = entries[i];
-    if (!e || !e.id) return;
-    try {
-      saving = true;
-      await updateDoc(doc(db, "Components", e.id), {
-        Name: e.Name,
-        Description: e.Description
+    const unsub = onSnapshot(q, snap => {
+      entries = snap.docs.map(d => {
+        const data = d.data() || {};
+        const name = data.componentName ?? data.Name ?? data.name ?? "";
+        const desc = data.description ?? data.Description ?? "";
+        const image_path = data.image_path ?? data.imagePath ?? data.image ?? "";
+        return { id: d.id, name, description: desc, image_path, editing:false, uploading:false };
       });
-      entries[i].editing = false;
-      entries = [...entries];
-      console.log("saved", e.id);
-    } catch (err) {
-      console.error("save error", err);
-    } finally {
-      saving = false;
-    }
-  }
+    }, () => {});
 
-  async function deleteEntry(i) {
-    if (!db) { console.error("deleteEntry: db not ready"); return; }
-    const e = entries[i];
-    if (!e || !e.id) return;
-    if (!confirm("Delete this component?")) return;
-    try {
-      await deleteDoc(doc(db, "Components", e.id));
-      console.log("deleted", e.id);
-    } catch (err) {
-      console.error("delete error", err);
-    }
-  }
+    const { onAuthStateChanged } = await import("firebase/auth");
+    const { collection: colFn, getDocs: getDocsFn } = await import("firebase/firestore");
+    const unsubAuth = onAuthStateChanged(appAuth, async user => {
+      if (!user) { window.location.href = "/"; return; }
+      try {
+        const email = (user.email||"").trim().toLowerCase();
+        const snap = await getDocsFn(colFn(db,"Admins"));
+        const allowed = snap.docs.some(d => Object.values(d.data()||{}).some(v => String(v||"").trim().toLowerCase() === email));
+        if (!allowed) { await appAuth.signOut(); window.location.href = "/"; }
+      } catch (e) {}
+    });
 
-  function logout() {
-    signOut(auth)
-      .then(() => {
-        // ensure client returns to login and session cleared
-        window.location.href = "/";
-      })
-      .catch(err => {
-        console.error("signOut failed:", err);
-        alert("Sign out failed: " + err.message);
-      });
+    return () => { try{unsub && unsub()}catch{} try{unsubAuth && unsubAuth()}catch{} };
+  } catch (e) {
+    loading = false;
   }
+});
 
-  async function addTestData() {
-    if (!db) return;
-    try {
-      await addDoc(collection(db, "Components"), { Name: "Test Component", Description: "This is a test." });
-      console.log("Test data added.");
-    } catch (err) {
-      console.error("Error adding test data:", err);
-    }
-  }
+async function addEntry(){
+  const name = DOMPurify.sanitize(componentName.trim());
+  const desc = DOMPurify.sanitize(description.trim());
+  if (!validator.isLength(name,{min:1})){ alert("Component name cannot be empty."); return; }
+  if (!db){ alert("Database not ready"); return; }
+  saving = true;
+  try{
+    await addDoc(collection(db,"components"), { componentName: name, description: desc, image_path: "" });
+    componentName = ""; description = "";
+  }catch(e){ alert("Failed to add: " + (e?.message||e)); } finally{ saving = false; }
+}
+
+function editEntry(i){ entries[i].editing = true; entries = [...entries]; }
+
+async function saveEntry(i){
+  if (!db) return;
+  const e = entries[i];
+  if (!e || !e.id) return;
+  saving = true;
+  try{
+    await updateDoc(doc(db,"components", e.id), { componentName: e.name, description: e.description, image_path: e.image_path ?? "" });
+    entries[i].editing = false; entries = [...entries];
+  }catch(e){ console.error(e); } finally{ saving = false; }
+}
+
+async function deleteEntry(i){
+  if (!db) return;
+  const e = entries[i];
+  if (!e || !e.id) return;
+  if (!confirm("Delete this component?")) return;
+  try{ await deleteDoc(doc(db,"components", e.id)); } catch(e){ console.error(e); }
+}
+
+function logout(){ signOut(auth).then(()=> window.location.href = "/").catch(()=>{}); }
 </script>
 
-<div class="page">
-    <header class="topbar">
-        <div class="title">ADMIN LIBRARY</div>
-
-        <div class="controls">
-            <button class="pill logout" on:click={logout}>LOGOUT</button>
-            <button class="pill" class:active={activeTab === "library"} on:click={() => goTo("/library")}>LIBRARY</button>
-            <button class="pill accent" class:active={activeTab === "catalog"} on:click={() => goTo("/catalog")}>CATALOG</button>
-        </div>
-    </header>
-
-    <main class="container">
-        <section class="input-row">
-            <input
-                class="input name"
-                placeholder="Component name..."
-                bind:value={componentName} />
-
-            <input
-                class="input desc"
-                placeholder="Description..."
-                bind:value={description} />
-
-            <button class="add" on:click={addEntry}>ADD</button>
-        </section>
-
-        <section class="list-headers">
-            <div class="col name-col">Name:</div>
-            <div class="col desc-col">Description:</div>
-        </section>
-
-        {#each entries as entry, i (entry.id)}
-          <div class="row">
-            {#if entry.editing}
-              <div class="name-box">
-                <input class="name-edit" bind:value={entry.Name} />
-              </div>
-
-              <div class="desc-box">
-                <textarea class="desc-edit" bind:value={entry.Description}></textarea>
-              </div>
-
-              <button class="icon save" type="button" on:click={() => saveEntry(i)} title="Save">
-                ✓
-              </button>
-              <button class="icon del" type="button" on:click={() => { entry.editing = false; entries = [...entries]; }} title="Cancel">
-                ✕
-              </button>
-            {:else}
-              <div class="name-box">{entry.Name}</div>
-              <div class="desc-box">{entry.Description}</div>
-              <button class="icon edit" type="button" on:click={() => editEntry(i)} title="Edit">✎</button>
-              <button class="icon del" type="button" on:click={() => deleteEntry(i)} title="Delete">🗑</button>
-            {/if}
-          </div>
-        {/each}
-    </main>
+<div class="catalog-container">
+ <h1>ADMIN LIBRARY</h1>
+  <div class="button-group">
+   <button class="logout-button" class:active={activeTab === "logout"} on:click={() => goTo("/")}>LOG OUT</button>
+   <button class="library-button" class:active={activeTab === "library"} on:click={() => goTo("library")}>LIBRARY</button>
+   <button class="catalog-button" class:active={activeTab === "catalog"} on:click={() => goTo("catalog")}>CATALOG</button>
+  </div>
 </div>
 
+<div class="catalog-component-box">
+ <input type="text" placeholder="Component Name..." class="component-name-input" bind:value={componentName}/>
+ <input type="text" placeholder="Description..." class="description-input" bind:value={description}/>
+ <button class="add-button" on:click={addEntry}>ADD</button>
+</div>
+
+<div class="title">
+  <div class="name-title"> Name:</div>
+  <div class="description-title"> Description:</div>
+</div>
+
+{#each entries as entry,i}
+<div class="catalog-entry-box">
+{#if entry.editing}
+ <input class="name_edit" bind:value={entry.name} on:input={() => (entries = [...entries])}/>
+ <textarea class="description_edit" bind:value={entry.description} on:input={() => (entries = [...entries])}></textarea>
+ <button class="save_button" on:click={() => saveEntry(i)}>Save</button>
+{:else}
+  <div class="name-entry">{entry.name}</div>
+  <div class="description-entry">
+    {entry.description}
+  </div>
+  <div class="row-actions">
+    <button class="edit_button_input" on:click={() => editEntry(i)}><img src="/write.svg" alt="edit" class="edit" /></button>
+    <button class="delete_button_input" on:click={() => deleteEntry(i)}><img src="/delete.svg" alt="delete" class="delete" /></button>
+  </div>
+{/if}
+</div>
+{/each}
+
 <style>
-    :global(body) {
-        margin: 0;
-        font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-        background: #112327;
-        color: #e6e6e6;
-    }
+  :global(body) {
+    background-color: #19333c;
+    margin: 0;
+    padding: 0;
+    color: #fff;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
 
-    .page { min-height: 100vh; }
+  .catalog-entry-box{
+    display: flex;
+    gap: 10px;
+    padding: 20px;
+    margin-top: 5px;
+    align-items: flex-start;
+  }
 
-    .topbar {
-        position: sticky;
-        top: 0;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 14px 22px;
-        background: linear-gradient(90deg,#0f2b2f,#081c1e);
-        border-bottom: 2px solid #7aa6c6;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-        z-index: 50;
-    }
+  .name-entry{
+    background-color: #000000;
+    padding: 10px;
+    border-radius: 10px;
+    border-color: #3E92B5;
+    border-width: 2px;
+    color: #CF8C44;
+    border-style: solid;
+    flex: 0 0 160px;
+    width: 160px;
+    height: 56px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
 
-    .title {
-        color: #f4b454;
-        font-weight: 700;
-        letter-spacing: .6px;
-    }
+  .description-entry{
+    background-color: #000000;
+    padding: 10px;
+    border-radius: 10px;
+    border-color: #3E92B5;
+    border-width: 2px;
+    color: #CF8C44;
+    border-style: solid;
+    flex: 1 1 auto;
+    min-height: 56px;
+    box-sizing: border-box;
+    word-break: break-word;
+    white-space: normal;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
 
-    .controls { display: flex; gap: 10px; align-items: center; }
+  .row-actions{
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
 
-    .pill {
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.05);
-        color: #ddd;
-        padding: 8px 12px;
-        border-radius: 16px;
-        cursor: pointer;
-        font-weight: 600;
-    }
-    .pill.accent { background: #123e48; border-color: #2e85a8; color: #fff; }
-    .pill.logout { background: #931f1f; border-color: #742020; color: #fff; }
+  .title {
+    display: flex;
+    gap: 10px;
+    padding: 0 20px;
+    margin-top: 12px;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+  }
+  .name-title {
+    flex: 0 0 160px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 6px 10px;
+    font-weight: 700;
+    color: #CF8C44;
+    box-sizing: border-box;
+  }
+  .description-title {
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    padding: 6px 10px;
+    font-weight: 700;
+    color: #CF8C44;
+    box-sizing: border-box;
+  }
 
-    .container {
-        max-width: 1100px;
-        margin: 24px auto;
-        padding: 16px;
-    }
+  :global(.button-group) { display: flex; gap: 10px; margin-left: auto; padding: 0 20px; height: 50px; }
+  :global(.library-button){ background-color: #3E92B5; color: #fff; border-radius: 10px; max-width: 100px; padding: 6px 10px; border-color: #3E92B5; border-width: 5px; }
+  :global(.catalog-button){ background-color:  #CF8C44; color: #fff; border-radius: 10px; max-width: 100px; padding: 6px 10px; border-color: #3E92B5; border-width: 5px; }
+  :global(.logout-button){ background-color: #b50b0b; color: #fff; border-radius: 10px; max-width: 100px; padding: 6px 10px; border-color: #841f03; border-width: 5px; }
 
-    .input-row {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 14px;
-    }
+  .catalog-container {
+    background-color: #000000;
+    height: 80px;
+    width: auto;
+    max-width: 2000px;
+    margin: 10px 15px 0 15px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    padding: 0 20px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    color: #CF8C44;
+    font-size: 24px;
+    font-weight: bold;
+    border-radius: 20px;
+    border: 1px solid #3E92B5;
+  }
 
-    .input {
-        background: #081818;
-        color: #e6e6e6;
-        border: 1px solid #234d57;
-        padding: 10px 12px;
-        border-radius: 10px;
-        outline: none;
-    }
-    .input.name { width: 180px; }
-    .input.desc { flex: 1; }
+  .catalog-component-box {
+    display: flex;
+    gap: 10px;
+    padding: 20px;
+    margin-top: 100px;
+    height: 50px;
+  }
+  .component-name-input{
+    flex: 0 0 160px;
+    padding: 6px 10px;
+    background-color: #000000;
+    color: #CF8C44;
+    border: 1px solid #3E92B5;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+  .description-input {
+    flex: 1;
+    padding: 6px 10px;
+    max-width: 1700px;
+    background-color: #000000;
+    color: #CF8C44;
+    border: 1px solid #3E92B5;
+    border-radius: 10px;
+    font-size: 16px;
+  }
 
-    .add {
-        background: linear-gradient(180deg,#f0b86b,#c77e3c);
-        border: none;
-        color: #080808;
-        padding: 10px 18px;
-        border-radius: 10px;
-        cursor: pointer;
-        font-weight: 700;
-    }
+  .add-button,.save_button{
+    background-color: #CF8C44;
+    color: #fff;
+    border-radius: 10px;
+    max-width: 500px;
+    padding: 6px 10px;
+    border: none;
+    font-size: 16px;
+  }
+  .edit_button_input{
+    background-color: #000000;
+    border-radius: 10px;
+    max-width: 500px;
+    max-height:70px;
+    padding: 6px 10px;
+    border: none;
+    font-size: 16px;
+  }
+  .delete_button_input{
+    background-color: #000000;
+    border-radius: 10px;
+    max-width: 500px;
+    max-height: 70px;
+    padding: 6px 10px;
+    border: none;
+    font-size: 16px;
+  }
 
-    .list-headers {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 8px;
-        color: #c7a36d;
-        font-weight: 700;
-        padding: 8px 6px;
-    }
+  .name_edit {
+    flex: 0 0 160px;
+    width: 160px;
+    height: 56px;
+    padding: 6px 10px;
+    background-color: #000000;
+    color: #CF8C44;
+    border: 1px solid #3E92B5;
+    border-radius: 10px;
+    font-size: 16px;
+    box-sizing: border-box;
+    align-self: center;
+  }
 
-    .col { padding-left: 6px; }
-    .name-col { width: 160px; }
-    .desc-col { flex: 1; }
-
-    /* set a single row item height variable so name, desc and icons match */
-    :root {
-        --row-item-height: 56px;
-    }
-
-    .row {
-        display: flex;
-        gap: 10px;
-        align-items: flex-start;   /* allow independent heights, align children to top */
-        padding: 8px 0;
-        margin-bottom: 10px;
-        background: transparent;
-        border: none;
-        border-radius: 0;
-        position: relative;        /* keep layout stable when pushing icons to the right */
-    }
-
-    /* keep name fixed height (does NOT follow description) */
-    .name-box {
-        background: #000000;
-        color: #ffd89b;
-        border: 1px solid #3e92b5;
-        display: flex;
-        align-items: center; /* vertically center the name text */
-        padding: 12px;
-        width: 160px;
-        flex: 0 0 160px;
-        white-space: normal;
-        word-break: break-word;
-        border-radius: 8px;
-        box-sizing: border-box;
-
-        /* FIXED height — does NOT stretch with description */
-        height: 56px;
-        min-height: 56px;
-        max-height: 56px;
-        overflow: hidden;
-        align-self: flex-start;
-    }
-
-    /* description grows, name stays fixed-height (unchanged) */
-    .desc-box {
-        background: #1b1313;
-        color: #ffd89b;
-        border: 1px solid rgba(62,146,181,0.08);
-        padding: 10px;
-        flex: 1 1 auto;
-        white-space: normal;
-        word-break: break-word;
-        border-radius: 8px;
-        box-shadow: inset 0 -6px 14px rgba(0,0,0,0.35);
-
-        height: auto;
-        min-height: 56px;
-        overflow: visible;
-        box-sizing: border-box;
-    }
-
-    /* icons: keep fixed square size, align to the top of the row (same "latitude" as name),
-       and push the first icon to the far right so the icon pair sits where you marked */
-    .icon {
-        background: #000000;
-        border: 1px solid #3e92b5;
-        color: #ffd89b;
-
-        width: 44px;
-        height: 44px;
-        flex: 0 0 44px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        align-self: flex-start;    /* align to top (same latitude as name) */
-        margin-left: 12px;         /* small gap from description */
-        box-sizing: border-box;
-        padding: 0;
-        border-radius: 8px;
-        cursor: pointer;
-        box-shadow: inset 0 -6px 14px rgba(0,0,0,0.35);
-    }
-
-    /* push the icon group to the far right of the row */
-    .icon:first-of-type {
-        margin-left: auto;
-    }
-
-    .icon img { width: 18px; height: 18px; }
-    .icon.del { background: #3a0b0b; border-color: #742020; }
-
-    /* editing inputs - ensure textarea wraps and is scrollable */
-    .name-edit, .desc-edit {
-        background: #071818;
-        color: #e6e6e6;
-        border: 1px solid #234d57;
-        min-height: 36px;
-        padding: 8px;
-        width: 100%;
-    }
-    .desc-edit {
-        resize: vertical;
-        max-height: 200px;
-        overflow: auto;
-    }
-
-    /* save/cancel buttons keep the same size/alignment as other icons */
-    .icon.save, .icon.del {
-      width: 44px;
-      height: 44px;
-      flex: 0 0 44px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      align-self: flex-start; /* same latitude as name-box top */
-      margin-left: 12px;
-    }
-
-    @media (max-width: 800px) {
-        .row { grid-template-columns: 1fr; gap:8px; }
-        .icon { justify-self: end; }
-        .list-headers { display:none; }
-    }
-
-    /* keep edit inputs filling the same boxes so layout doesn't jump */
-    .name-box, .desc-box { box-sizing: border-box; }
-
-    .name-edit {
-      width: 100%;
-      height: 100%;
-      border: none;
-      background: transparent;
-      color: inherit;
-      padding: 0;
-      margin: 0;
-      box-sizing: border-box;
-      font: inherit;
-      outline: none;
-    }
-
-    .desc-edit {
-      width: 100%;
-      min-height: 56px; /* same visual min as read view */
-      border: none;
-      background: transparent;
-      color: inherit;
-      padding: 0;
-      margin: 0;
-      box-sizing: border-box;
-      font: inherit;
-      resize: vertical; /* allow resizing when editing */
-      outline: none;
-    }
+  .description_edit{
+    flex: 1;
+    min-height: 140px;
+    padding: 8px 10px;
+    background-color: #000000;
+    color: #CF8C44;
+    border: 1px solid #3E92B5;
+    border-radius: 10px;
+    font-size: 16px;
+    box-sizing: border-box;
+    resize: vertical;
+    white-space: pre-wrap;
+  }
 </style>

@@ -3,16 +3,15 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Use Vite env vars so you can switch projects without editing source
 const firebaseConfig = {
-  apiKey: "AIzaSyBCAavAwIuxSXUp2vpEEt4YLnvqgRq67q0",
-  authDomain: "adminpage-f9686.firebaseapp.com",
-  projectId: "adminpage-f9686",
-  storageBucket: "adminpage-f9686.firebasestorage.app",
-  messagingSenderId: "8079081540",
-  appId: "1:8079081540:web:5a0c61502f5f3f569ebc11",
-  measurementId: "G-WGZW4JHK10"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBCAavAwIuxSXUp2vpEEt4YLnvqgRq67q0",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "adminpage-f9686.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "adminpage-f9686",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "adminpage-f9686.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "8079081540",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:8079081540:web:5a0c61502f5f3f569ebc11",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-WGZW4JHK10"
 };
 
 // Initialize Firebase only in browser to avoid SSR errors
@@ -24,8 +23,10 @@ if (typeof window !== "undefined") {
   if (!getApps().length) app = initializeApp(firebaseConfig);
   else app = getApps()[0];
 
+  // debug: confirm which Firebase project is connected
+  console.log("Firebase projectId:", (app as any)?.options?.projectId ?? firebaseConfig.projectId);
+
   auth = getAuth(app);
-  // DO NOT call signInAnonymously(auth) here — remove any auto-signin
   db = getFirestore(app);
 }
 
