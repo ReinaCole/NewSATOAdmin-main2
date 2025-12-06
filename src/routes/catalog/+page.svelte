@@ -12,9 +12,9 @@ import {
   doc
 } from "firebase/firestore";
 import { signOut } from "firebase/auth";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import DOMPurify from "dompurify";
 import validator from "validator";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 let activeTab = "catalog";
 let db = null;
@@ -22,11 +22,12 @@ let app = null;
 let auth = null;
 let entries = [];
 let componentName = "";
-let description = "";
+let discoveredBy = "";
+let discoveryPeriod = "";
+let category = "";
 let saving = false;
 let loading = true;
 
-// Navigate helper
 function goTo(path) {
   if (typeof window !== "undefined") window.location.href = path;
 }
@@ -40,7 +41,6 @@ onMount(async () => {
 
     if (!db) { loading = false; return; }
 
-    // Firestore query
     const q = query(collection(db, "catalog"), orderBy("componentName"));
 
     // Initial fetch
@@ -48,10 +48,17 @@ onMount(async () => {
       const snap = await getDocs(q);
       entries = snap.docs.map(d => {
         const data = d.data() || {};
-        const name = data.componentName ?? data.Name ?? data.name ?? "";
-        const desc = data.description ?? data.Description ?? "";
-        const image_path = data.image_path ?? data.imagePath ?? data.image ?? "";
-        return { id: d.id, name, description: desc, image_path, editing:false, uploading:false };
+        return {
+          id: d.id,
+          name: data.componentName ?? "",
+          discoveredBy: data.discoveredBy ?? "",
+          discoveryPeriod: data.discoveryPeriod ?? "",
+          category: data.category ?? "",
+          sym_img: data.sym_img ?? "",
+
+          editing: false,
+          uploading: false
+        };
       });
     } catch {
       entries = [];
@@ -63,23 +70,28 @@ onMount(async () => {
     const unsub = onSnapshot(q, snap => {
       entries = snap.docs.map(d => {
         const data = d.data() || {};
-        const name = data.componentName ?? data.Name ?? data.name ?? "";
-        const desc = data.description ?? data.Description ?? "";
-        const image_path = data.image_path ?? data.imagePath ?? data.image ?? "";
-        return { id: d.id, name, description: desc, image_path, editing:false, uploading:false };
+        return {
+          id: d.id,
+          name: data.componentName ?? "",
+          discoveredBy: data.discoveredBy ?? "",
+          discoveryPeriod: data.discoveryPeriod ?? "",
+          category: data.category ?? "",
+          image_path: data.image_path ?? "",
+          editing: false,
+          uploading: false
+        };
       });
     });
 
     // Auth listener
     const { onAuthStateChanged } = await import("firebase/auth");
-    const { collection: colFn, getDocs: getDocsFn } = await import("firebase/firestore");
     const unsubAuth = onAuthStateChanged(auth, async user => {
       if (!user) { window.location.href = "/"; return; }
 
       try {
         const email = (user.email || "").trim().toLowerCase();
-        const snap = await getDocsFn(colFn(db, "Admins"));
-        const allowed = snap.docs.some(d => Object.values(d.data()||{}).some(v => String(v||"").trim().toLowerCase() === email));
+        const snap = await getDocs(collection(db, "Admins"));
+        const allowed = snap.docs.some(d => Object.values(d.data() || {}).some(v => String(v || "").trim().toLowerCase() === email));
         if (!allowed) { await auth.signOut(); window.location.href = "/"; }
       } catch (e) { console.error("Auth check failed:", e); }
     });
@@ -96,48 +108,66 @@ onMount(async () => {
 
 // Add component
 async function addEntry() {
-  const name = DOMPurify.sanitize(componentName.trim());
-  const desc = DOMPurify.sanitize(description.trim());
-  if (!validator.isLength(name, { min:1 })) { alert("Component name cannot be empty."); return; }
+
+const name = componentName.trim();
+const discoverer = discoveredBy.trim();
+const period = discoveryPeriod.trim();
+const cat = category.trim();
+
+  if (!validator.isLength(name, { min: 1 })) { alert("Component name cannot be empty."); return; }
   if (!db) { alert("Database not ready"); return; }
+
   saving = true;
   try {
-    await addDoc(collection(db, "catalog"), { componentName: name, description: desc, image_path: "" });
-    componentName = ""; description = "";
-  } catch(e) { alert("Failed to add: " + (e?.message||e)); }
+    await addDoc(collection(db, "catalog"), {
+      componentName: name,
+      discoveredBy: discoverer,
+      discoveryPeriod: period,
+      category: cat,
+      image_path: ""
+    });
+    componentName = discoveredBy = discoveryPeriod = category = "";
+  } catch(e) { alert("Failed to add: " + (e?.message || e)); }
   finally { saving = false; }
 }
 
-// Edit
+// Edit entry
 function editEntry(i) {
-  entries[i].editing = true; 
+  entries[i].editing = true;
   entries = [...entries];
 }
-
-// Upload ng image
+// Upload image
 async function uploadImage(i) {
   const fileInput = document.createElement("input");
-  fileInput.type = "file"; 
+  fileInput.type = "file";
   fileInput.accept = "image/*";
 
   fileInput.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    entries[i].uploading = true; 
+    entries[i].uploading = true;
     entries = [...entries];
 
     try {
       const storage = getStorage(app);
-      const storageRef = ref(storage, `image_path/${Date.now()}_${file.name}`);
+      const storageRef = ref(storage, `sym_img/${Date.now()}_${file.name}`);
+
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
 
-      entries[i].image_path = url;
-      entries[i].uploading = false;
+      // UI
+      entries[i].sym_img = url;
       entries = [...entries];
+
+      // Firestore
+      await updateDoc(doc(db, "catalog", entries[i].id), {
+        sym_img: url
+      });
+
     } catch (err) {
       console.error("Upload failed:", err);
+    } finally {
       entries[i].uploading = false;
       entries = [...entries];
     }
@@ -146,7 +176,8 @@ async function uploadImage(i) {
   fileInput.click();
 }
 
-// Save edit
+
+// Save edited entry
 async function saveEntry(i) {
   if (!db) return;
   const e = entries[i];
@@ -154,26 +185,31 @@ async function saveEntry(i) {
 
   saving = true;
   try {
-    await updateDoc(doc(db,"catalog", e.id), { componentName: e.name, description: e.description, image_path: e.image_path });
-    entries[i].editing = false; 
+    await updateDoc(doc(db, "catalog", e.id), {
+      componentName: e.name,
+      discoveredBy: e.discoveredBy,
+      discoveryPeriod: e.discoveryPeriod,
+      category: e.category,
+      image_path: e.image_path
+    });
+    entries[i].editing = false;
     entries = [...entries];
   } catch(err) { console.error(err); }
   finally { saving = false; }
 }
 
-// pang Delete
+// Delete entry
 async function deleteEntry(i) {
   if (!db) return;
   const e = entries[i];
   if (!e || !e.id) return;
   if (!confirm("Delete this component?")) return;
 
-  try {
-    await deleteDoc(doc(db,"catalog", e.id));
-  } catch(err) { console.error(err); }
+  try { await deleteDoc(doc(db,"catalog", e.id)); }
+  catch(err) { console.error(err); }
 }
 
-// pang Logout
+// Logout
 function logout() {
   auth && signOut(auth)
     .then(()=> window.location.href = "/")
@@ -181,62 +217,72 @@ function logout() {
 }
 </script>
 
-
-
 <div class="catalog-container">
  <h1>ADMIN CATALOG</h1>
- 
   <div class="button-group">
-   <button class="logout-button" class:active={activeTab === "logout"} on:click={() => goTo("/")}>LOG OUT</button>
+   <button class="logout-button" class:active={activeTab === "logout"} on:click={logout}>LOG OUT</button>
    <button class="library-button" class:active={activeTab === "library"} on:click={() => goTo("library")}>LIBRARY</button>
    <button class="catalog-button" class:active={activeTab === "catalog"} on:click={() => goTo("catalog")}>CATALOG</button>
   </div>
 </div>
 
-
 <div class="catalog-component-box">
- <input type="text" placeholder="Component Name..." class="component-name-input" bind:value={componentName}/>
- <input type="text" placeholder="Description..." class="description-input" bind:value={description}/>
- <button class="add-button" on:click={addEntry}>ADD</button>
+  <input type="text" placeholder="Component Name..." class="component-name-input" bind:value={componentName}/>
+  <input type="text" placeholder="Discovered by..." class="discovered-input" bind:value={discoveredBy}/>
+  <input type="text" placeholder="Period of discovery..." class="discovery-input" bind:value={discoveryPeriod}/>
+  <input type="text" placeholder="Category..." class="category-input" bind:value={category}/>
+  <button class="add-button" on:click={addEntry}>ADD</button>
 </div>
-
 
 <div class="title">
-  <div class="name-title"> Name:</div>
-  <div class="description-title"> Description:</div>
-  <!--<div class="image-title"> Image:</div>-->
+  <div class="name-title">Name:</div>
+  <div class="description-title">Description:</div>
 </div>
 
+{#each entries as entry, i}
 
-{#each entries as entry,i}
+  <div class="catalog-entry-box">
 
-<div class="catalog-entry-box">
+    {#if entry.editing}
 
-{#if entry.editing}
+      <input class="name_edit" placeholder="Component Name..." bind:value={entry.name} on:input={() => (entries = [...entries])}/>
+      
+      <input class="discovered_edit" placeholder="Discovered by..." bind:value={entry.discoveredBy} on:input={() => (entries = [...entries])}/>
+     
+      <input class="discovery_edit" placeholder="Period of Discovery..." bind:value={entry.discoveryPeriod} on:input={() => (entries = [...entries])}/>
+      
+      <input class="category_edit" placeholder="Category..." bind:value={entry.category} on:input={() => (entries = [...entries])}/>
+      
+      <button class="save_button" on:click={() => saveEntry(i)}>Save</button>
 
+    {:else}
 
- <input class="name_edit" bind:value={entry.name} on:input={() => (entries = [...entries])}/>
- <textarea class="description_edit" bind:value={entry.description} on:input={() => (entries = [...entries])}></textarea>
- <button class="save_button" on:click={() => saveEntry(i)}>Save</button>
- 
-{:else}
+      <div class="name-entry">{entry.name}</div>
 
-  <div class="name-entry">{entry.name}</div>
-  <div class="description-entry">
+      <div class="description-entry">
+        {#if entry.discoveredBy || entry.discoveryPeriod || entry.category}
+          <div>Discovered by: {entry.discoveredBy}</div>
+          <div>Period of Discovery: {entry.discoveryPeriod}</div>
+          <div>Category: {entry.category}</div>
 
-    {entry.description}
+        {/if}
 
+      </div>
+
+      <!-- Only show actions when NOT editing -->
+      <div class="row-actions">
+        <button class="img_path_input" on:click={() => uploadImage(i)}>
+          <img src="/add.svg" alt="img_path" class="imgpath" />
+        </button>
+        <button class="edit_button_input" on:click={() => editEntry(i)}>
+          <img src="/write.svg" alt="edit" class="edit" />
+        </button>
+        <button class="delete_button_input" on:click={() => deleteEntry(i)}>
+          <img src="/delete.svg" alt="delete" class="delete" />
+        </button>
+      </div>
+    {/if}
   </div>
-
-  <div class="row-actions">
-     <button class="img_path_input" on:click={() => uploadImage (i)}><img src="/add.svg" alt="img_path" class="imgpath" /></button>
-    <button class="edit_button_input" on:click={() => editEntry(i)}><img src="/write.svg" alt="edit" class="edit" /></button>
-    <button class="delete_button_input" on:click={() => deleteEntry(i)}><img src="/delete.svg" alt="delete" class="delete" /></button>
- 
-  </div>
-  
-{/if}
-</div>
 {/each}
 
 
@@ -331,7 +377,7 @@ function logout() {
     color: #CF8C44;
     box-sizing: border-box;
   }
-  .image-title {
+  /*.image-title {
     flex: 1;
     display: flex;
     align-items: flex-start;
@@ -340,7 +386,7 @@ function logout() {
     font-weight: 700;
     color: #CF8C44;
     box-sizing: border-box;
-  }
+  }*/
 
   :global(.button-group) { display: flex; gap: 10px; margin-left: auto; padding: 0 20px; height: 50px; }
   :global(.library-button){ background-color: #3E92B5; color: #fff; border-radius: 10px; max-width: 100px; padding: 6px 10px; border-color: #3E92B5; border-width: 5px; }
@@ -377,25 +423,29 @@ function logout() {
     margin-top: 100px;
     height: 50px;
   }
-  .component-name-input{
-    flex: 0 0 160px;
-    padding: 6px 10px;
-    background-color: #000000;
-    color: #CF8C44;
-    border: 1px solid #3E92B5;
-    border-radius: 10px;
-    font-size: 16px;
-  }
-  .description-input {
-    flex: 1;
-    padding: 6px 10px;
-    max-width: 1700px;
-    background-color: #000000;
-    color: #CF8C44;
-    border: 1px solid #3E92B5;
-    border-radius: 10px;
-    font-size: 16px;
-  }
+  .component-name-input {
+  flex: 0 0 160px;
+  padding: 6px 10px;
+  background-color: #000000;
+  color: #CF8C44;
+  border: 1px solid #3E92B5;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+
+.discovered-input,
+.discovery-input,
+.category-input {
+  flex: 1;
+  padding: 6px 10px;
+  max-width: 1700px;
+  background-color: #000000;
+  color: #CF8C44;
+  border: 1px solid #3E92B5;
+  border-radius: 10px;
+  font-size: 16px;
+}
 
 
   .add-button,.save_button{
@@ -471,7 +521,7 @@ function logout() {
   }
 
 
-  .description_edit{
+  .discovered_edit,.discovery_edit,.category_edit {
     flex: 1;
     min-height: 140px;
     padding: 8px 10px;
