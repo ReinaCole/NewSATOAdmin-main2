@@ -1,11 +1,48 @@
 <script>
+import { onMount } from "svelte";
 import { auth } from "$lib/firebase";
-import { signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import DOMPurify from 'dompurify';
+
 
 let activeTab = "/";
 let loading = false;
 let error = "";
+
+
+onMount(async () => {
+  const { db } = await import("$lib/firebase");
+  const { collection, getDocs } = await import("firebase/firestore");
+
+
+  const unsub = onAuthStateChanged(auth, async (user) => {
+    console.log("Auth state:", user);
+    if (!user) {
+      return;
+    }
+
+
+    const email = (user.email || "").trim().toLowerCase();
+    const snap = await getDocs(collection(db, "Admins"));
+    const allowed = snap.docs.some(doc =>
+      Object.values(doc.data() || {}).some(v =>
+        String(v || "").trim().toLowerCase() === email
+      )
+    );
+
+
+    if (allowed) {
+      console.log("User is admin — ready to continue");
+    } else {
+      await signOut(auth);
+      alert("You are not authorized.");
+    }
+  });
+
+
+  return unsub;
+});
+
 
 async function loginWithGoogle() {
   loading = true;
@@ -15,8 +52,10 @@ async function loginWithGoogle() {
     const result = await signInWithPopup(auth, provider);
     const email = (result.user?.email || "").trim().toLowerCase();
 
+
     const { db } = await import("$lib/firebase");
     const { collection, getDocs } = await import("firebase/firestore");
+
 
     const snap = await getDocs(collection(db, "Admins"));
     const allowed = snap.docs.some(doc =>
@@ -24,6 +63,7 @@ async function loginWithGoogle() {
         String(v || "").trim().toLowerCase() === email
       )
     );
+
 
     if (allowed) {
       window.location.href = "/library";
@@ -39,8 +79,10 @@ async function loginWithGoogle() {
   }
 }
 
+
 function goTo(path) { if (typeof window !== "undefined") window.location.href = path; }
 </script>
+
 
 <div class="login-container">
   <div class="login-box">
@@ -48,12 +90,15 @@ function goTo(path) { if (typeof window !== "undefined") window.location.href = 
       <img src="/logo.png" alt="Logo" class="logo" />
     </div>
 
+
     <h2>S.A.T.O ADMIN</h2>
     <p>SIGN-IN</p>
+
 
     {#if error}
       <p class="error-msg">{error}</p>
     {/if}
+
 
     <button
       class="google-btn"
@@ -67,6 +112,7 @@ function goTo(path) { if (typeof window !== "undefined") window.location.href = 
   </div>
 </div>
 
+
 <style>
 .login-container {
   background-color: #19333c;
@@ -75,6 +121,7 @@ function goTo(path) { if (typeof window !== "undefined") window.location.href = 
   justify-content: center;
   align-items: center;
 }
+
 
 .login-box {
   background: #122831;
@@ -91,6 +138,7 @@ function goTo(path) { if (typeof window !== "undefined") window.location.href = 
   border: 1px solid rgb(69,120,165);
 }
 
+
 .logo-wrapper {
   position: absolute;
   top: -160px;
@@ -101,6 +149,7 @@ function goTo(path) { if (typeof window !== "undefined") window.location.href = 
   box-shadow: 0 0 20px rgba(0,0,0,0.3);
 }
 
+
 .logo {
   width: 250px;
   height: 250px;
@@ -108,15 +157,18 @@ function goTo(path) { if (typeof window !== "undefined") window.location.href = 
   object-fit: cover;
 }
 
+
 h2 {
   margin-top: 60px;
   color: white;
   font-weight: 700;
 }
 
+
 p {
   color: #b9e4d3;
 }
+
 
 .google-btn {
   display: flex;
@@ -133,20 +185,24 @@ p {
   transition: all 0.2s ease;
 }
 
+
 .google-btn:hover:not(:disabled) {
   background-color: #0c0c0c;
   transform: scale(1.03);
 }
+
 
 .google-btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
 
+
 .google-icon {
   width: 22px;
   height: 22px;
 }
+
 
 .error-msg {
   color: #ff6b6b;
