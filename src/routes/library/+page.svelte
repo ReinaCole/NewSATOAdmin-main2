@@ -1,18 +1,6 @@
 <script>
 import { onMount } from "svelte";
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc
-} from "firebase/firestore";
 import { auth } from "$lib/firebase";
-import { signOut } from "firebase/auth";
 import DOMPurify from "dompurify";
 import validator from "validator";
 
@@ -35,6 +23,9 @@ onMount(async () => {
     const appAuth = mod.auth;
 
     if (!db) { loading = false; return; }
+
+    const { collection, query, orderBy, onSnapshot, getDocs, addDoc, updateDoc, deleteDoc, doc } = await import("firebase/firestore");
+    const { onAuthStateChanged } = await import("firebase/auth");
 
     const q = query(collection(db, "components"), orderBy("componentName"));
 
@@ -63,13 +54,11 @@ onMount(async () => {
       });
     }, () => {});
 
-    const { onAuthStateChanged } = await import("firebase/auth");
-    const { collection: colFn, getDocs: getDocsFn } = await import("firebase/firestore");
     const unsubAuth = onAuthStateChanged(appAuth, async user => {
       if (!user) { window.location.href = "/"; return; }
       try {
         const email = (user.email||"").trim().toLowerCase();
-        const snap = await getDocsFn(colFn(db,"Admins"));
+        const snap = await getDocs(collection(db,"Admins"));
         const allowed = snap.docs.some(d => Object.values(d.data()||{}).some(v => String(v||"").trim().toLowerCase() === email));
         if (!allowed) { await appAuth.signOut(); window.location.href = "/"; }
       } catch (e) {}
@@ -88,6 +77,7 @@ async function addEntry(){
   if (!db){ alert("Database not ready"); return; }
   saving = true;
   try{
+    const { collection, addDoc } = await import("firebase/firestore");
     await addDoc(collection(db,"components"), { componentName: name, description: desc, image_path: "" });
     componentName = ""; description = "";
   }catch(e){ alert("Failed to add: " + (e?.message||e)); } finally{ saving = false; }
@@ -101,6 +91,7 @@ async function saveEntry(i){
   if (!e || !e.id) return;
   saving = true;
   try{
+    const { doc, updateDoc } = await import("firebase/firestore");
     await updateDoc(doc(db,"components", e.id), { componentName: e.name, description: e.description, image_path: e.image_path ?? "" });
     entries[i].editing = false; entries = [...entries];
   }catch(e){ console.error(e); } finally{ saving = false; }
@@ -111,10 +102,16 @@ async function deleteEntry(i){
   const e = entries[i];
   if (!e || !e.id) return;
   if (!confirm("Delete this component?")) return;
-  try{ await deleteDoc(doc(db,"components", e.id)); } catch(e){ console.error(e); }
+  try{ 
+    const { doc, deleteDoc } = await import("firebase/firestore");
+    await deleteDoc(doc(db,"components", e.id)); 
+  } catch(e){ console.error(e); }
 }
 
-function logout(){ signOut(auth).then(()=> window.location.href = "/").catch(()=>{}); }
+async function logout(){ 
+  const { signOut } = await import("firebase/auth");
+  signOut(auth).then(()=> window.location.href = "/").catch(()=>{}); 
+}
 </script>
 
 <div class="catalog-container">
